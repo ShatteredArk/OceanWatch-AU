@@ -27,7 +27,9 @@ import { fetchCdseProducts } from '../copernicus';
 import { db } from '@vercel/postgres';
 
 const mockFetchCdseProducts = fetchCdseProducts as MockedFunction<typeof fetchCdseProducts>;
-const mockDbQuery = db.query as MockedFunction<typeof db.query>;
+// db.query is mocked above; cast to vi.fn() shape for test helpers
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockDbQuery = db.query as unknown as ReturnType<typeof vi.fn<any>>;
 
 const mockProduct: CdseProduct = {
   Id: 'test-product-id-1',
@@ -45,7 +47,8 @@ const mockProduct: CdseProduct = {
 describe('runIngest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDbQuery.mockResolvedValue({ rows: [], rowCount: 0, command: 'INSERT', oid: 0, fields: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockDbQuery.mockResolvedValue({ rows: [] } as any);
   });
 
   it('returns attempted and upserted counts', async () => {
@@ -62,10 +65,12 @@ describe('runIngest', () => {
   it('wraps POLYGON footprint in MULTIPOLYGON', async () => {
     let capturedWkt = '';
 
-    mockDbQuery.mockImplementationOnce(async (_text: unknown, values: unknown[]) => {
+    mockDbQuery.mockImplementationOnce(async (...args: unknown[]) => {
+      const values = args[1] as unknown[];
       // The geometry WKT is the 5th parameter ($5)
       capturedWkt = values[4] as string;
-      return { rows: [] };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { rows: [] } as any;
     });
 
     mockFetchCdseProducts.mockResolvedValue([mockProduct]);
@@ -95,7 +100,8 @@ describe('runIngest', () => {
   });
 
   it('records errors and continues when upsert fails', async () => {
-    mockDbQuery.mockRejectedValueOnce(new Error('DB connection error') as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockDbQuery.mockRejectedValueOnce(new Error('DB connection error') as any);
 
     mockFetchCdseProducts.mockResolvedValue([mockProduct]);
 
