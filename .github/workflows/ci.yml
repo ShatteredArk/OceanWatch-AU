@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Type-check · Lint · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Unit tests
+        run: pnpm test
+        env:
+          # Tests use mocked DB; no real Postgres required in CI
+          POSTGRES_URL: postgresql://mock:mock@localhost:5432/mock
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Sentry upload disabled in CI unless SENTRY_AUTH_TOKEN is set
+          SENTRY_SUPPRESS_TURBOPACK_WARNING: 1
+          NEXT_PUBLIC_SENTRY_DSN: ''
+          POSTGRES_URL: postgresql://mock:mock@localhost:5432/mock
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_mock
+          CRON_SECRET: mock-secret
+          CDSE_CLIENT_ID: mock
+          CDSE_CLIENT_SECRET: mock
+          CMEMS_USERNAME: mock
+          CMEMS_PASSWORD: mock

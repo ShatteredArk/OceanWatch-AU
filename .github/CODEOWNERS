@@ -1,0 +1,11 @@
+# Global owners — all files
+* @shatteredark
+
+# Data pipeline and schema — extra scrutiny
+/db/ @shatteredark
+/src/lib/copernicus.ts @shatteredark
+/src/lib/ingest.ts @shatteredark
+/src/app/api/ @shatteredark
+
+# Public API contract
+/docs/api.md @shatteredark
