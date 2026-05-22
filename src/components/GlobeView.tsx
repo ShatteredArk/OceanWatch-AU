@@ -23,11 +23,12 @@ const Globe = dynamic(() => import('./Globe').then((m) => ({ default: m.Globe })
 
 interface GlobeViewProps {
   initialDetections: DetectionFeatureCollection;
+  isDemoMode?: boolean;
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-export function GlobeView({ initialDetections }: GlobeViewProps) {
+export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrubberTime, setScrubberTime] = useState<number>(() => Date.now());
 
@@ -99,6 +100,11 @@ export function GlobeView({ initialDetections }: GlobeViewProps) {
           <span className="hidden sm:inline text-slate-600 text-xs">
             Near-real-time ocean pollution detections
           </span>
+          {isDemoMode && (
+            <span className="inline-flex items-center rounded border border-amber-700/40 bg-amber-950/30 px-2 py-0.5 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+              Demo
+            </span>
+          )}
         </div>
 
         {/* Confidence tier legend */}
