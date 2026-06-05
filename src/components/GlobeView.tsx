@@ -6,6 +6,7 @@ import { IncidentPanel } from './IncidentPanel';
 import { TimeScrubber } from './TimeScrubber';
 import { Footer } from './Footer';
 import type { DetectionFeatureCollection, DetectionFeature } from '@/lib/detections';
+import { getAmsaIncidents } from '@/lib/amsa-incidents';
 
 const Globe = dynamic(() => import('./Globe').then((m) => ({ default: m.Globe })), {
   ssr: false,
@@ -58,6 +59,9 @@ function useAnimatedCount(target: number, duration = 700): number {
 export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrubberTime, setScrubberTime] = useState<number>(() => Date.now());
+
+  // AMSA historical incidents — static, always rendered regardless of scrubber
+  const amsaIncidents = useMemo(() => getAmsaIncidents(), []);
   // Empty on SSR; filled after hydration to avoid mismatch
   const [utcTime, setUtcTime] = useState('');
 
@@ -82,8 +86,12 @@ export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewPr
 
   const selectedFeature = useMemo((): DetectionFeature | null => {
     if (!selectedId) return null;
-    return initialDetections.features.find((f) => f.properties.id === selectedId) ?? null;
-  }, [initialDetections, selectedId]);
+    return (
+      initialDetections.features.find((f) => f.properties.id === selectedId) ??
+      amsaIncidents.features.find((f) => f.properties.id === selectedId) ??
+      null
+    );
+  }, [initialDetections, amsaIncidents, selectedId]);
 
   const handleDetectionClick = useCallback((id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -123,6 +131,7 @@ export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewPr
       {/* Globe fills the viewport */}
       <Globe
         detections={filteredDetections}
+        amsaIncidents={amsaIncidents}
         onDetectionClick={handleDetectionClick}
         selectedId={selectedId}
       />
