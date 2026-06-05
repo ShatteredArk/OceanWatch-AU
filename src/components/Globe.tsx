@@ -31,7 +31,7 @@ const MONITORING_BBOX = {
   north: -8.0,
 } as const;
 
-// GeoJSON polygon tracing the monitoring boundary (clockwise ring)
+// GeoJSON polygon tracing the monitoring boundary (counter-clockwise = RFC 7946 exterior)
 const MONITORING_BOUNDARY_GEOJSON = {
   type: 'FeatureCollection' as const,
   features: [
@@ -45,6 +45,40 @@ const MONITORING_BOUNDARY_GEOJSON = {
             [MONITORING_BBOX.east, MONITORING_BBOX.north],
             [MONITORING_BBOX.east, MONITORING_BBOX.south],
             [MONITORING_BBOX.west, MONITORING_BBOX.south],
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+          ],
+        ],
+      },
+      properties: {},
+    },
+  ],
+};
+
+// "Donut" polygon: the entire globe with the monitoring zone punched out as a hole.
+// The outer ring (counter-clockwise) covers everything; the inner ring (clockwise)
+// cuts out the monitored area so it remains at full fidelity underneath.
+const OUTSIDE_MASK_GEOJSON = {
+  type: 'FeatureCollection' as const,
+  features: [
+    {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          // Outer ring — whole world, counter-clockwise
+          [
+            [-180, -90],
+            [-180, 90],
+            [180, 90],
+            [180, -90],
+            [-180, -90],
+          ],
+          // Inner ring — monitoring zone hole, clockwise
+          [
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+            [MONITORING_BBOX.west, MONITORING_BBOX.south],
+            [MONITORING_BBOX.east, MONITORING_BBOX.south],
+            [MONITORING_BBOX.east, MONITORING_BBOX.north],
             [MONITORING_BBOX.west, MONITORING_BBOX.north],
           ],
         ],
@@ -126,6 +160,21 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
           'water'
         );
+
+        // Outside mask — dims everything beyond the monitoring zone
+        map.addSource('outside-mask', {
+          type: 'geojson',
+          data: OUTSIDE_MASK_GEOJSON,
+        });
+        map.addLayer({
+          id: 'outside-mask-fill',
+          type: 'fill',
+          source: 'outside-mask',
+          paint: {
+            'fill-color': '#020b18',
+            'fill-opacity': 0.78,
+          },
+        });
 
         // Monitoring zone boundary
         map.addSource('monitoring-boundary', {
