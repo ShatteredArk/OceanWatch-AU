@@ -6,6 +6,7 @@ import type { DetectionFeatureCollection } from '@/lib/detections';
 
 interface GlobeProps {
   detections: DetectionFeatureCollection;
+  amsaIncidents: DetectionFeatureCollection;
   onDetectionClick: (id: string) => void;
   selectedId: string | null;
 }
@@ -88,7 +89,33 @@ const OUTSIDE_MASK_GEOJSON = {
   ],
 };
 
-export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) {
+/** Builds a tileable 16×16 crosshatch ImageData for use as a fill-pattern. */
+function buildCrosshatchImage(): ImageData {
+  const sz = 16;
+  const canvas = document.createElement('canvas');
+  canvas.width = sz;
+  canvas.height = sz;
+  const ctx = canvas.getContext('2d')!;
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1.5;
+  // Draw both diagonal families — canvas clips to tile bounds automatically.
+  // The endpoints are offset by ±sz so adjacent tile edges join seamlessly.
+  for (const ox of [-sz, 0, sz]) {
+    // '\' family (top-left → bottom-right)
+    ctx.beginPath();
+    ctx.moveTo(ox, 0);
+    ctx.lineTo(ox + sz, sz);
+    ctx.stroke();
+    // '/' family (top-right → bottom-left)
+    ctx.beginPath();
+    ctx.moveTo(ox + sz, 0);
+    ctx.lineTo(ox, sz);
+    ctx.stroke();
+  }
+  return ctx.getImageData(0, 0, sz, sz);
+}
+
+export function Globe({ detections, amsaIncidents, onDetectionClick, selectedId }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const animFrameRef = useRef<number>(0);
@@ -206,6 +233,39 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
         });
 
+        // ── AMSA historical incidents — always-visible permanent layer ──────────
+
+        map.addSource('amsa-incidents', {
+          type: 'geojson',
+          data: amsaIncidents,
+          generateId: true,
+        });
+
+        // Bold fill — slightly higher opacity than demo to signal authority
+        map.addLayer({
+          id: 'amsa-incidents-fill',
+          type: 'fill',
+          source: 'amsa-incidents',
+          paint: {
+            'fill-color': [...TIER_COLOR_EXPR] as unknown as string,
+            'fill-opacity': 0.5,
+          },
+        });
+
+        // Solid bright outline (no dash) to distinguish from demo
+        map.addLayer({
+          id: 'amsa-incidents-outline',
+          type: 'line',
+          source: 'amsa-incidents',
+          paint: {
+            'line-color': [...TIER_COLOR_EXPR] as unknown as string,
+            'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 4, 2.5],
+            'line-opacity': 1.0,
+          },
+        });
+
+        // ── Detection layers (demo + future real data) ────────────────────────
+
         // Detection GeoJSON source
         map.addSource('detections', {
           type: 'geojson',
@@ -231,6 +291,22 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
               0.12,
               0.18, // anomaly
             ],
+          },
+        });
+
+        // Crosshatch pattern overlay — demo detections only
+        // Transparent background with white diagonal lines makes the tier colour
+        // show through while visually flagging these as simulated data.
+        map.addImage('demo-crosshatch', buildCrosshatchImage());
+        map.addLayer({
+          id: 'detections-demo-hatch',
+          type: 'fill',
+          source: 'detections',
+          filter: ['==', ['get', 'source'], 'demo'],
+          paint: {
+            // fill-pattern replaces fill-color; fill-opacity still applies
+            'fill-pattern': 'demo-crosshatch',
+            'fill-opacity': 0.85,
           },
         });
 
@@ -285,17 +361,21 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
         };
         animate();
 
-        // Click → incident panel
+        // Click → incident panel (detections + AMSA incidents)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         map.on('click', 'detections-fill', handleDetectionClick as any);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        map.on('click', 'amsa-incidents-fill', handleDetectionClick as any);
 
         // Pointer cursor on hover
-        map.on('mouseenter', 'detections-fill', () => {
-          if (map) map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'detections-fill', () => {
-          if (map) map.getCanvas().style.cursor = '';
-        });
+        for (const layer of ['detections-fill', 'amsa-incidents-fill']) {
+          map.on('mouseenter', layer, () => {
+            if (map) map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', layer, () => {
+            if (map) map.getCanvas().style.cursor = '';
+          });
+        }
       });
     });
 
@@ -317,18 +397,39 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
     source?.setData(detections);
   }, [detections]);
 
-  // Highlight selected detection
+  // Update AMSA incidents data (static in practice, but keeps the pattern consistent)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const source = map.getSource('amsa-incidents') as GeoJSONSource | undefined;
+    source?.setData(amsaIncidents);
+  }, [amsaIncidents]);
+
+  // Highlight selected detection (detections source)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
     map.removeFeatureState({ source: 'detections' });
+    map.removeFeatureState({ source: 'amsa-incidents' });
+
     if (selectedId) {
-      const features = map.querySourceFeatures('detections', {
+      // Check detections source
+      const detFeatures = map.querySourceFeatures('detections', {
         filter: ['==', ['get', 'id'], selectedId],
       });
-      const first = features[0];
-      if (first?.id !== undefined) {
-        map.setFeatureState({ source: 'detections', id: first.id }, { selected: true });
+      const detFirst = detFeatures[0];
+      if (detFirst?.id !== undefined) {
+        map.setFeatureState({ source: 'detections', id: detFirst.id }, { selected: true });
+      }
+
+      // Check AMSA incidents source
+      const amsaFeatures = map.querySourceFeatures('amsa-incidents', {
+        filter: ['==', ['get', 'id'], selectedId],
+      });
+      const amsaFirst = amsaFeatures[0];
+      if (amsaFirst?.id !== undefined) {
+        map.setFeatureState({ source: 'amsa-incidents', id: amsaFirst.id }, { selected: true });
       }
     }
   }, [selectedId]);

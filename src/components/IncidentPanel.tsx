@@ -33,6 +33,10 @@ function formatLocal(iso: string): string {
   });
 }
 
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
 export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +64,13 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
 
   const p = feature.properties;
   const tierClass = TIER_CLASSES[p.confidence_tier] ?? TIER_CLASSES.anomaly;
+  const isAmsa = p.provenance === 'amsa-historical';
+  const isDemo = p.source === 'demo';
+
+  const vessel = str(p.metadata?.vessel);
+  const quantity = str(p.metadata?.quantity);
+  const incidentDate = str(p.metadata?.date);
+  const notes = str(p.metadata?.notes);
 
   return (
     <div
@@ -70,7 +81,9 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-100 tracking-wide">Detection Details</h2>
+        <h2 className="text-sm font-semibold text-slate-100 tracking-wide">
+          {isAmsa ? 'Historical Incident' : 'Detection Details'}
+        </h2>
         <button
           onClick={onClose}
           aria-label="Close panel"
@@ -81,8 +94,32 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
       </div>
 
       <div className="px-4 py-4 space-y-4">
-        {/* Experimental badge */}
-        {p.is_experimental && (
+        {/* AMSA Historical banner */}
+        {isAmsa && (
+          <div className="flex items-start gap-2 rounded border border-sky-700/40 bg-sky-950/30 px-3 py-2">
+            <span className="text-sky-400 text-xs font-semibold uppercase tracking-wider shrink-0 mt-0.5">
+              AMSA Verified
+            </span>
+            <span className="text-sky-300/80 text-xs">
+              Sourced from the Australian Maritime Safety Authority incident registry.
+            </span>
+          </div>
+        )}
+
+        {/* Demo data banner */}
+        {isDemo && (
+          <div className="flex items-start gap-2 rounded border border-slate-600/40 bg-slate-800/30 px-3 py-2">
+            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider shrink-0 mt-0.5">
+              Demo
+            </span>
+            <span className="text-slate-500 text-xs">
+              Simulated detection — not a real pollution event.
+            </span>
+          </div>
+        )}
+
+        {/* Experimental badge (non-demo heuristic) */}
+        {p.is_experimental && !isDemo && !isAmsa && (
           <div className="flex items-center gap-2 rounded border border-orange-700/40 bg-orange-950/30 px-3 py-2">
             <span className="text-orange-400 text-xs font-semibold uppercase tracking-wider">
               Experimental
@@ -126,26 +163,66 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
           </div>
         )}
 
+        {/* AMSA-specific metadata */}
+        {isAmsa && (vessel || incidentDate || quantity || notes) && (
+          <dl className="space-y-2 text-sm border border-sky-900/30 rounded-md bg-sky-950/10 px-3 py-3">
+            {vessel && (
+              <div>
+                <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Vessel</dt>
+                <dd className="text-slate-200 text-xs font-medium">{vessel}</dd>
+              </div>
+            )}
+            {incidentDate && (
+              <div>
+                <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
+                  Incident Date
+                </dt>
+                <dd className="text-slate-300 text-xs">{incidentDate}</dd>
+              </div>
+            )}
+            {quantity && (
+              <div>
+                <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
+                  Volume Spilled
+                </dt>
+                <dd className="text-slate-300 text-xs">{quantity}</dd>
+              </div>
+            )}
+            {notes && (
+              <div>
+                <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Notes</dt>
+                <dd className="text-slate-400 text-xs italic leading-relaxed">{notes}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+
         {/* Core fields */}
         <dl className="space-y-2 text-sm">
-          <div>
-            <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Detection ID</dt>
-            <dd className="text-slate-300 font-mono text-xs break-all">{p.id}</dd>
-          </div>
+          {!isAmsa && (
+            <div>
+              <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
+                Detection ID
+              </dt>
+              <dd className="text-slate-300 font-mono text-xs break-all">{p.id}</dd>
+            </div>
+          )}
 
           <div>
             <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
-              Detected (UTC)
+              {isAmsa ? 'Incident Date (UTC)' : 'Detected (UTC)'}
             </dt>
             <dd className="text-slate-300 text-xs">{formatUtc(p.detected_at)}</dd>
           </div>
 
-          <div>
-            <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
-              Detected (local)
-            </dt>
-            <dd className="text-slate-300 text-xs">{formatLocal(p.detected_at)}</dd>
-          </div>
+          {!isAmsa && (
+            <div>
+              <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
+                Detected (local)
+              </dt>
+              <dd className="text-slate-300 text-xs">{formatLocal(p.detected_at)}</dd>
+            </div>
+          )}
 
           <div>
             <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Area</dt>
@@ -154,22 +231,26 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
             </dd>
           </div>
 
-          <div>
-            <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
-              Acquisition ID
-            </dt>
-            <dd className="text-slate-300 font-mono text-xs break-all">{p.acquisition_id}</dd>
-          </div>
+          {!isAmsa && (
+            <div>
+              <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">
+                Acquisition ID
+              </dt>
+              <dd className="text-slate-300 font-mono text-xs break-all">{p.acquisition_id}</dd>
+            </div>
+          )}
 
           <div>
             <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Source</dt>
             <dd className="text-slate-300 text-xs">{p.source}</dd>
           </div>
 
-          <div>
-            <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Provenance</dt>
-            <dd className="text-slate-300 text-xs">{p.provenance}</dd>
-          </div>
+          {!isAmsa && (
+            <div>
+              <dt className="text-slate-500 text-xs uppercase tracking-wider mb-0.5">Provenance</dt>
+              <dd className="text-slate-300 text-xs">{p.provenance}</dd>
+            </div>
+          )}
         </dl>
 
         {/* Actions */}
@@ -180,7 +261,7 @@ export function IncidentPanel({ feature, onClose }: IncidentPanelProps) {
             rel="noopener noreferrer"
             className="block w-full text-center rounded border border-white/8 bg-white/5 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
           >
-            View raw data ↗
+            {isAmsa ? 'View on AMSA ↗' : 'View raw data ↗'}
           </a>
         )}
       </div>
