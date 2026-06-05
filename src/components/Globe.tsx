@@ -23,6 +23,71 @@ const TIER_COLOR_EXPR = [
   '#818cf8', // anomaly / default
 ] as const;
 
+// Monitoring zone — mirrors AUS_PACIFIC_BBOX in src/lib/copernicus.ts
+const MONITORING_BBOX = {
+  west: 94.0,
+  south: -47.0,
+  east: 169.0,
+  north: -8.0,
+} as const;
+
+// GeoJSON polygon tracing the monitoring boundary (counter-clockwise = RFC 7946 exterior)
+const MONITORING_BOUNDARY_GEOJSON = {
+  type: 'FeatureCollection' as const,
+  features: [
+    {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+            [MONITORING_BBOX.east, MONITORING_BBOX.north],
+            [MONITORING_BBOX.east, MONITORING_BBOX.south],
+            [MONITORING_BBOX.west, MONITORING_BBOX.south],
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+          ],
+        ],
+      },
+      properties: {},
+    },
+  ],
+};
+
+// "Donut" polygon: the entire globe with the monitoring zone punched out as a hole.
+// The outer ring (counter-clockwise) covers everything; the inner ring (clockwise)
+// cuts out the monitored area so it remains at full fidelity underneath.
+const OUTSIDE_MASK_GEOJSON = {
+  type: 'FeatureCollection' as const,
+  features: [
+    {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          // Outer ring — whole world, counter-clockwise
+          [
+            [-180, -90],
+            [-180, 90],
+            [180, 90],
+            [180, -90],
+            [-180, -90],
+          ],
+          // Inner ring — monitoring zone hole, clockwise
+          [
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+            [MONITORING_BBOX.west, MONITORING_BBOX.south],
+            [MONITORING_BBOX.east, MONITORING_BBOX.south],
+            [MONITORING_BBOX.east, MONITORING_BBOX.north],
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+          ],
+        ],
+      },
+      properties: {},
+    },
+  ],
+};
+
 export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -70,7 +135,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
       map.on('load', () => {
         if (destroyed || !map) return;
 
-        // GEBCO bathymetry raster overlay (best-effort; may not tile correctly on globe)
+        // GEBCO bathymetry raster overlay
         map.addSource('gebco', {
           type: 'raster',
           tiles: [
@@ -96,6 +161,51 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           'water'
         );
 
+        // Outside mask — dims everything beyond the monitoring zone
+        map.addSource('outside-mask', {
+          type: 'geojson',
+          data: OUTSIDE_MASK_GEOJSON,
+        });
+        map.addLayer({
+          id: 'outside-mask-fill',
+          type: 'fill',
+          source: 'outside-mask',
+          paint: {
+            'fill-color': '#020b18',
+            'fill-opacity': 0.78,
+          },
+        });
+
+        // Monitoring zone boundary
+        map.addSource('monitoring-boundary', {
+          type: 'geojson',
+          data: MONITORING_BOUNDARY_GEOJSON,
+        });
+
+        // Faint red fill inside the monitoring zone
+        map.addLayer({
+          id: 'monitoring-fill',
+          type: 'fill',
+          source: 'monitoring-boundary',
+          paint: {
+            'fill-color': '#ef4444',
+            'fill-opacity': 0.03,
+          },
+        });
+
+        // Dashed red perimeter
+        map.addLayer({
+          id: 'monitoring-border',
+          type: 'line',
+          source: 'monitoring-boundary',
+          paint: {
+            'line-color': '#ef4444',
+            'line-width': 1.5,
+            'line-opacity': 0.55,
+            'line-dasharray': [4, 5],
+          },
+        });
+
         // Detection GeoJSON source
         map.addSource('detections', {
           type: 'geojson',
@@ -103,7 +213,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           generateId: true,
         });
 
-        // Fill layer — all tiers
+        // Fill layer — base polygon fill
         map.addLayer({
           id: 'detections-fill',
           type: 'fill',
@@ -124,7 +234,21 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
         });
 
-        // Outline layer
+        // Soft glow ring on verified + probable detections
+        map.addLayer({
+          id: 'detections-glow',
+          type: 'line',
+          source: 'detections',
+          filter: ['in', ['get', 'confidence_tier'], ['literal', ['verified', 'probable']]],
+          paint: {
+            'line-color': [...TIER_COLOR_EXPR] as unknown as string,
+            'line-width': 12,
+            'line-opacity': 0.1,
+            'line-blur': 6,
+          },
+        });
+
+        // Crisp outline
         map.addLayer({
           id: 'detections-outline',
           type: 'line',
@@ -148,7 +272,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
         });
 
-        // Animate the pulse layer at 1.5s cycle
+        // Animate the pulse layer at ~1.5 s cycle
         const animate = () => {
           const p = pulseRef.current;
           p.opacity += p.direction * 0.008;
@@ -213,7 +337,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
     <div
       ref={containerRef}
       className="absolute inset-0"
-      aria-label="Interactive globe showing ocean pollution detections"
+      aria-label="Interactive map showing ocean pollution detections in Australian waters"
     />
   );
 }

@@ -2,33 +2,41 @@
  * Home page — server component that fetches initial detections and passes
  * them to the client-side GlobeView.
  *
- * We fetch the last 30 days on the server so the first render has data
- * without a client-side waterfall.
+ * Falls back to static demo detections when the database is empty or
+ * unavailable (initial deploy, local dev without seeds, etc.).
  */
 
 import { GlobeView } from '@/components/GlobeView';
 import { queryDetections } from '@/lib/detections';
+import { getDemoDetections } from '@/lib/demo-detections';
 import type { DetectionFeatureCollection } from '@/lib/detections';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-async function getInitialDetections(): Promise<DetectionFeatureCollection> {
+async function getInitialDetections(): Promise<{
+  data: DetectionFeatureCollection;
+  isDemoMode: boolean;
+}> {
   try {
-    return await queryDetections({
+    const result = await queryDetections({
       start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       end: new Date(),
       limit: 500,
     });
+    if (result.features.length > 0) {
+      return { data: result, isDemoMode: false };
+    }
+    return { data: getDemoDetections(), isDemoMode: true };
   } catch {
-    // If the DB isn't available (e.g. during initial deploy before migration),
-    // return an empty FeatureCollection so the globe still renders.
-    return { type: 'FeatureCollection', features: [] };
+    // DB not available (e.g. before migration runs) — show demo data so the
+    // globe is never blank on first load.
+    return { data: getDemoDetections(), isDemoMode: true };
   }
 }
 
 export default async function HomePage() {
-  const initialDetections = await getInitialDetections();
+  const { data: initialDetections, isDemoMode } = await getInitialDetections();
 
-  return <GlobeView initialDetections={initialDetections} />;
+  return <GlobeView initialDetections={initialDetections} isDemoMode={isDemoMode} />;
 }
