@@ -23,21 +23,42 @@ const TIER_COLOR_EXPR = [
   '#818cf8', // anomaly / default
 ] as const;
 
-// Full rotation in ~3.5 minutes at 60 fps; each easeTo covers 1 second of arc
-const SECONDS_PER_REVOLUTION = 210;
-const DEGREES_PER_STEP = 360 / SECONDS_PER_REVOLUTION;
-const SPIN_RESUME_DELAY_MS = 3000;
-const MAX_SPIN_ZOOM = 5; // above this zoom spinning stops automatically
+// Monitoring zone — mirrors AUS_PACIFIC_BBOX in src/lib/copernicus.ts
+const MONITORING_BBOX = {
+  west: 94.0,
+  south: -47.0,
+  east: 169.0,
+  north: -8.0,
+} as const;
+
+// GeoJSON polygon tracing the monitoring boundary (clockwise ring)
+const MONITORING_BOUNDARY_GEOJSON = {
+  type: 'FeatureCollection' as const,
+  features: [
+    {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+            [MONITORING_BBOX.east, MONITORING_BBOX.north],
+            [MONITORING_BBOX.east, MONITORING_BBOX.south],
+            [MONITORING_BBOX.west, MONITORING_BBOX.south],
+            [MONITORING_BBOX.west, MONITORING_BBOX.north],
+          ],
+        ],
+      },
+      properties: {},
+    },
+  ],
+};
 
 export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const animFrameRef = useRef<number>(0);
   const pulseRef = useRef({ opacity: 0.35, direction: 1 });
-
-  // Spin state — plain refs to avoid re-renders
-  const interactingRef = useRef(false);
-  const spinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleDetectionClick = useCallback(
     (
@@ -77,51 +98,6 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
 
       mapRef.current = map;
 
-      // ── Spin helpers ────────────────────────────────────────────────────────
-
-      function spinGlobe() {
-        if (!map || destroyed) return;
-        if (interactingRef.current) return;
-        if (map.getZoom() >= MAX_SPIN_ZOOM) return;
-        const center = map.getCenter();
-        center.lng -= DEGREES_PER_STEP;
-        map.easeTo({ center, duration: 1000, easing: (t) => t });
-      }
-
-      function scheduleSpinResume() {
-        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
-        spinTimerRef.current = setTimeout(() => {
-          interactingRef.current = false;
-          spinGlobe();
-        }, SPIN_RESUME_DELAY_MS);
-      }
-
-      map.on('mousedown', () => {
-        interactingRef.current = true;
-        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
-      });
-
-      map.on('touchstart', () => {
-        interactingRef.current = true;
-        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
-      });
-
-      map.on('mouseup', scheduleSpinResume);
-      map.on('touchend', scheduleSpinResume);
-      map.on('dragend', scheduleSpinResume);
-
-      // Chain: each completed easeTo triggers the next step
-      map.on('moveend', () => spinGlobe());
-
-      // Resume after zoom-out below the threshold
-      map.on('zoomend', () => {
-        if (map && map.getZoom() < MAX_SPIN_ZOOM && !interactingRef.current) {
-          spinGlobe();
-        }
-      });
-
-      // ── Map load ─────────────────────────────────────────────────────────────
-
       map.on('load', () => {
         if (destroyed || !map) return;
 
@@ -150,6 +126,36 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
           'water'
         );
+
+        // Monitoring zone boundary
+        map.addSource('monitoring-boundary', {
+          type: 'geojson',
+          data: MONITORING_BOUNDARY_GEOJSON,
+        });
+
+        // Faint red fill inside the monitoring zone
+        map.addLayer({
+          id: 'monitoring-fill',
+          type: 'fill',
+          source: 'monitoring-boundary',
+          paint: {
+            'fill-color': '#ef4444',
+            'fill-opacity': 0.03,
+          },
+        });
+
+        // Dashed red perimeter
+        map.addLayer({
+          id: 'monitoring-border',
+          type: 'line',
+          source: 'monitoring-boundary',
+          paint: {
+            'line-color': '#ef4444',
+            'line-width': 1.5,
+            'line-opacity': 0.55,
+            'line-dasharray': [4, 5],
+          },
+        });
 
         // Detection GeoJSON source
         map.addSource('detections', {
@@ -241,15 +247,11 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
         map.on('mouseleave', 'detections-fill', () => {
           if (map) map.getCanvas().style.cursor = '';
         });
-
-        // Start ambient auto-rotation
-        spinGlobe();
       });
     });
 
     return () => {
       destroyed = true;
-      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
       cancelAnimationFrame(animFrameRef.current);
       map?.remove();
       mapRef.current = null;
@@ -286,7 +288,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
     <div
       ref={containerRef}
       className="absolute inset-0"
-      aria-label="Interactive globe showing ocean pollution detections"
+      aria-label="Interactive map showing ocean pollution detections in Australian waters"
     />
   );
 }
