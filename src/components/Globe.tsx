@@ -23,11 +23,21 @@ const TIER_COLOR_EXPR = [
   '#818cf8', // anomaly / default
 ] as const;
 
+// Full rotation in ~3.5 minutes at 60 fps; each easeTo covers 1 second of arc
+const SECONDS_PER_REVOLUTION = 210;
+const DEGREES_PER_STEP = 360 / SECONDS_PER_REVOLUTION;
+const SPIN_RESUME_DELAY_MS = 3000;
+const MAX_SPIN_ZOOM = 5; // above this zoom spinning stops automatically
+
 export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const animFrameRef = useRef<number>(0);
   const pulseRef = useRef({ opacity: 0.35, direction: 1 });
+
+  // Spin state — plain refs to avoid re-renders
+  const interactingRef = useRef(false);
+  const spinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleDetectionClick = useCallback(
     (
@@ -67,10 +77,55 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
 
       mapRef.current = map;
 
+      // ── Spin helpers ────────────────────────────────────────────────────────
+
+      function spinGlobe() {
+        if (!map || destroyed) return;
+        if (interactingRef.current) return;
+        if (map.getZoom() >= MAX_SPIN_ZOOM) return;
+        const center = map.getCenter();
+        center.lng -= DEGREES_PER_STEP;
+        map.easeTo({ center, duration: 1000, easing: (t) => t });
+      }
+
+      function scheduleSpinResume() {
+        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+        spinTimerRef.current = setTimeout(() => {
+          interactingRef.current = false;
+          spinGlobe();
+        }, SPIN_RESUME_DELAY_MS);
+      }
+
+      map.on('mousedown', () => {
+        interactingRef.current = true;
+        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      });
+
+      map.on('touchstart', () => {
+        interactingRef.current = true;
+        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      });
+
+      map.on('mouseup', scheduleSpinResume);
+      map.on('touchend', scheduleSpinResume);
+      map.on('dragend', scheduleSpinResume);
+
+      // Chain: each completed easeTo triggers the next step
+      map.on('moveend', () => spinGlobe());
+
+      // Resume after zoom-out below the threshold
+      map.on('zoomend', () => {
+        if (map && map.getZoom() < MAX_SPIN_ZOOM && !interactingRef.current) {
+          spinGlobe();
+        }
+      });
+
+      // ── Map load ─────────────────────────────────────────────────────────────
+
       map.on('load', () => {
         if (destroyed || !map) return;
 
-        // GEBCO bathymetry raster overlay (best-effort; may not tile correctly on globe)
+        // GEBCO bathymetry raster overlay
         map.addSource('gebco', {
           type: 'raster',
           tiles: [
@@ -103,7 +158,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           generateId: true,
         });
 
-        // Fill layer — all tiers
+        // Fill layer — base polygon fill
         map.addLayer({
           id: 'detections-fill',
           type: 'fill',
@@ -124,7 +179,21 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
         });
 
-        // Outline layer
+        // Soft glow ring on verified + probable detections
+        map.addLayer({
+          id: 'detections-glow',
+          type: 'line',
+          source: 'detections',
+          filter: ['in', ['get', 'confidence_tier'], ['literal', ['verified', 'probable']]],
+          paint: {
+            'line-color': [...TIER_COLOR_EXPR] as unknown as string,
+            'line-width': 12,
+            'line-opacity': 0.1,
+            'line-blur': 6,
+          },
+        });
+
+        // Crisp outline
         map.addLayer({
           id: 'detections-outline',
           type: 'line',
@@ -148,7 +217,7 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
           },
         });
 
-        // Animate the pulse layer at 1.5s cycle
+        // Animate the pulse layer at ~1.5 s cycle
         const animate = () => {
           const p = pulseRef.current;
           p.opacity += p.direction * 0.008;
@@ -172,11 +241,15 @@ export function Globe({ detections, onDetectionClick, selectedId }: GlobeProps) 
         map.on('mouseleave', 'detections-fill', () => {
           if (map) map.getCanvas().style.cursor = '';
         });
+
+        // Start ambient auto-rotation
+        spinGlobe();
       });
     });
 
     return () => {
       destroyed = true;
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
       cancelAnimationFrame(animFrameRef.current);
       map?.remove();
       mapRef.current = null;

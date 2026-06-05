@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { IncidentPanel } from './IncidentPanel';
 import { TimeScrubber } from './TimeScrubber';
 import { Footer } from './Footer';
 import type { DetectionFeatureCollection, DetectionFeature } from '@/lib/detections';
 
-// Dynamically import the Globe to keep the initial JS bundle under 200kB.
-// MapLibre GL JS (~800kB gzipped) loads only after the component mounts.
 const Globe = dynamic(() => import('./Globe').then((m) => ({ default: m.Globe })), {
   ssr: false,
   loading: () => (
@@ -28,16 +26,51 @@ interface GlobeViewProps {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Animates a number from its previous value to `target` using ease-out cubic.
+// Returns the current animated value (starts at 0 on initial mount).
+function useAnimatedCount(target: number, duration = 700): number {
+  const [display, setDisplay] = useState(0);
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    const from = prevRef.current;
+    prevRef.current = target;
+    let cancelled = false;
+    const start = performance.now();
+
+    function step(now: number) {
+      if (cancelled) return;
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      setDisplay(Math.round(from + (target - from) * eased));
+      if (t < 1) requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+    return () => {
+      cancelled = true;
+    };
+  }, [target, duration]);
+
+  return display;
+}
+
 export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scrubberTime, setScrubberTime] = useState<number>(() => Date.now());
+  // Empty on SSR; filled after hydration to avoid mismatch
+  const [utcTime, setUtcTime] = useState('');
 
-  // Filter detections based on the time scrubber position.
-  // The scrubber value is the "end" time; we always show the last 30 days up to that point.
+  useEffect(() => {
+    const tick = () => setUtcTime(new Date().toISOString().slice(11, 19));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const filteredDetections = useMemo((): DetectionFeatureCollection => {
     const endMs = scrubberTime;
     const startMs = endMs - THIRTY_DAYS_MS;
-
     return {
       type: 'FeatureCollection',
       features: initialDetections.features.filter((f) => {
@@ -72,6 +105,19 @@ export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewPr
     return counts;
   }, [filteredDetections]);
 
+  // Animated display values for each tier count
+  const animVerified = useAnimatedCount(tierCounts.verified ?? 0);
+  const animProbable = useAnimatedCount(tierCounts.probable ?? 0);
+  const animPossible = useAnimatedCount(tierCounts.possible ?? 0);
+  const animAnomaly = useAnimatedCount(tierCounts.anomaly ?? 0);
+
+  const animCounts: Record<string, number> = {
+    verified: animVerified,
+    probable: animProbable,
+    possible: animPossible,
+    anomaly: animAnomaly,
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#020b18]">
       {/* Globe fills the viewport */}
@@ -81,12 +127,14 @@ export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewPr
         selectedId={selectedId}
       />
 
-      {/* Radial vignette */}
+      {/* Atmospheric vignette — dark edges + subtle blue halo */}
       <div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
-          background:
-            'radial-gradient(ellipse at center, transparent 40%, rgba(2,11,24,0.45) 100%)',
+          background: [
+            'radial-gradient(ellipse at center, transparent 38%, rgba(2,11,24,0.55) 100%)',
+            'radial-gradient(ellipse at center, transparent 44%, rgba(14,42,80,0.07) 56%, transparent 65%)',
+          ].join(', '),
         }}
       />
 
@@ -107,26 +155,48 @@ export function GlobeView({ initialDetections, isDemoMode = false }: GlobeViewPr
           )}
         </div>
 
-        {/* Confidence tier legend */}
-        <div className="hidden sm:flex items-center gap-3 text-xs">
-          {(
-            [
-              { key: 'verified', label: 'Verified', color: '#ef4444' },
-              { key: 'probable', label: 'Probable', color: '#f59e0b' },
-              { key: 'possible', label: 'Possible', color: '#fcd34d' },
-              { key: 'anomaly', label: 'Anomaly', color: '#818cf8' },
-            ] as const
-          ).map(({ key, label, color }) => (
-            <span key={key} className="flex items-center gap-1 text-slate-400">
-              <span
-                className="inline-block w-2.5 h-2.5 rounded-sm"
-                style={{ backgroundColor: color, opacity: 0.85 }}
-              />
-              <span className={tierCounts[key] ? 'text-slate-300' : 'text-slate-600'}>
-                {label} {tierCounts[key] ? `(${tierCounts[key]})` : ''}
+        <div className="flex items-center gap-4">
+          {/* Confidence tier legend with animated counts */}
+          <div className="hidden sm:flex items-center gap-3 text-xs">
+            {(
+              [
+                { key: 'verified', label: 'Verified', color: '#ef4444' },
+                { key: 'probable', label: 'Probable', color: '#f59e0b' },
+                { key: 'possible', label: 'Possible', color: '#fcd34d' },
+                { key: 'anomaly', label: 'Anomaly', color: '#818cf8' },
+              ] as const
+            ).map(({ key, label, color }) => {
+              const n = animCounts[key] ?? 0;
+              const raw = tierCounts[key] ?? 0;
+              return (
+                <span key={key} className="flex items-center gap-1 text-slate-400">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ backgroundColor: color, opacity: 0.85 }}
+                  />
+                  <span className={raw ? 'text-slate-300' : 'text-slate-600'}>
+                    {label}
+                    {raw ? <span className="ml-1 tabular-nums">({n})</span> : null}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Live UTC clock */}
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 border-l border-white/5 pl-4">
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"
+              style={{ animation: 'detection-pulse 2s ease-in-out infinite' }}
+            />
+            {utcTime ? (
+              <span className="font-mono tabular-nums">
+                {utcTime} <span className="text-slate-700">UTC</span>
               </span>
-            </span>
-          ))}
+            ) : (
+              <span>Live</span>
+            )}
+          </div>
         </div>
       </header>
 
