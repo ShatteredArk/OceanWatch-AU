@@ -89,27 +89,21 @@ const OUTSIDE_MASK_GEOJSON = {
   ],
 };
 
-/** Builds a tileable 16×16 crosshatch ImageData for use as a fill-pattern. */
-function buildCrosshatchImage(): ImageData {
-  const sz = 16;
+/** Builds a tileable 10×10 diagonal-stripe ImageData for use as a fill-pattern.
+ *  Single '/' family only — cleaner than crosshatch for marking simulated data. */
+function buildDemoStripeImage(): ImageData {
+  const sz = 10;
   const canvas = document.createElement('canvas');
   canvas.width = sz;
   canvas.height = sz;
   const ctx = canvas.getContext('2d')!;
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
   ctx.lineWidth = 1.5;
-  // Draw both diagonal families — canvas clips to tile bounds automatically.
-  // The endpoints are offset by ±sz so adjacent tile edges join seamlessly.
+  // '/' stripes — draw three passes so tile edges join seamlessly when repeated.
   for (const ox of [-sz, 0, sz]) {
-    // '\' family (top-left → bottom-right)
     ctx.beginPath();
-    ctx.moveTo(ox, 0);
-    ctx.lineTo(ox + sz, sz);
-    ctx.stroke();
-    // '/' family (top-right → bottom-left)
-    ctx.beginPath();
-    ctx.moveTo(ox + sz, 0);
-    ctx.lineTo(ox, sz);
+    ctx.moveTo(ox + sz, 0); // top-right corner of shifted tile
+    ctx.lineTo(ox, sz); // bottom-left corner of shifted tile
     ctx.stroke();
   }
   return ctx.getImageData(0, 0, sz, sz);
@@ -297,7 +291,7 @@ export function Globe({ detections, amsaIncidents, onDetectionClick, selectedId 
         // Crosshatch pattern overlay — demo detections only
         // Transparent background with white diagonal lines makes the tier colour
         // show through while visually flagging these as simulated data.
-        map.addImage('demo-crosshatch', buildCrosshatchImage());
+        map.addImage('demo-stripe', buildDemoStripeImage());
         map.addLayer({
           id: 'detections-demo-hatch',
           type: 'fill',
@@ -305,7 +299,7 @@ export function Globe({ detections, amsaIncidents, onDetectionClick, selectedId 
           filter: ['==', ['get', 'source'], 'demo'],
           paint: {
             // fill-pattern replaces fill-color; fill-opacity still applies
-            'fill-pattern': 'demo-crosshatch',
+            'fill-pattern': 'demo-stripe',
             'fill-opacity': 0.85,
           },
         });
