@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OceanWatch AU — v1 Roadmap</title>
+    <style>
+      :root {
+        --bg: #020b18;
+        --surface: #061525;
+        --surface2: #0a1f35;
+        --border: rgba(255, 255, 255, 0.07);
+        --text: #e2e8f0;
+        --muted: #64748b;
+        --faint: #334155;
+        --red: #ef4444;
+        --amber: #f59e0b;
+        --green: #22c55e;
+        --sky: #38bdf8;
+        --indigo: #818cf8;
+        --slate: #94a3b8;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        padding: 40px 32px 64px;
+        max-width: 1160px;
+        margin: 0 auto;
+      }
+
+      /* ── Header ────────────────────────────────────────── */
+      .page-header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 8px;
+      }
+      .page-header h1 {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.3px;
+        color: #f1f5f9;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 4px;
+        border: 1px solid;
+        padding: 2px 8px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .badge-amber {
+        color: var(--amber);
+        border-color: rgba(245, 158, 11, 0.3);
+        background: rgba(245, 158, 11, 0.08);
+      }
+      .badge-green {
+        color: var(--green);
+        border-color: rgba(34, 197, 94, 0.3);
+        background: rgba(34, 197, 94, 0.08);
+      }
+      .page-sub {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 36px;
+      }
+
+      /* ── Section titles ────────────────────────────────── */
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* ── Pipeline ──────────────────────────────────────── */
+      .pipeline {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        margin-bottom: 40px;
+        overflow-x: auto;
+      }
+      .pipe-node {
+        flex: 1;
+        min-width: 140px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 12px;
+        position: relative;
+      }
+      .pipe-node + .pipe-node {
+        margin-left: 2px;
+      }
+      .pipe-node::after {
+        content: '→';
+        position: absolute;
+        right: -13px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--faint);
+        font-size: 16px;
+        z-index: 1;
+      }
+      .pipe-node:last-child::after {
+        display: none;
+      }
+      .pipe-status {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        flex-shrink: 0;
+      }
+      .status-done {
+        background: var(--green);
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+      }
+      .status-partial {
+        background: var(--amber);
+        box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+      }
+      .status-missing {
+        background: var(--red);
+        box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+      }
+      .pipe-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .pipe-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #94a3b8;
+      }
+      .pipe-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin-bottom: 6px;
+      }
+      .pipe-detail {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .pipe-tag {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 2px 7px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+      .tag-done {
+        background: rgba(34, 197, 94, 0.12);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+      }
+      .tag-partial {
+        background: rgba(245, 158, 11, 0.12);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+      }
+      .tag-missing {
+        background: rgba(239, 68, 68, 0.1);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+      }
+
+      /* ── Two-column checklist ──────────────────────────── */
+      .checklist-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 40px;
+      }
+      .checklist-col {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+      }
+      .col-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .col-title-green {
+        color: var(--green);
+      }
+      .col-title-amber {
+        color: var(--amber);
+      }
+      .check-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+      }
+      .check-item:last-child {
+        border-bottom: none;
+      }
+      .check-icon {
+        font-size: 13px;
+        margin-top: 0px;
+        flex-shrink: 0;
+        width: 16px;
+      }
+      .check-text {
+        font-size: 12px;
+        color: #cbd5e1;
+        line-height: 1.4;
+      }
+      .check-note {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .check-critical {
+        background: rgba(239, 68, 68, 0.06);
+        border-radius: 5px;
+        padding: 7px 8px;
+        margin: 2px 0;
+        border: 1px solid rgba(239, 68, 68, 0.15);
+        border-bottom: 1px solid rgba(239, 68, 68, 0.15) !important;
+      }
+      .check-critical .check-text {
+        color: #fca5a5;
+        font-weight: 600;
+      }
+
+      /* ── Blocker options ───────────────────────────────── */
+      .options-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 40px;
+      }
+      .option-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .option-card.recommended {
+        border-color: rgba(56, 189, 248, 0.35);
+        background: rgba(56, 189, 248, 0.04);
+      }
+      .option-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .option-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #f1f5f9;
+      }
+      .option-effort {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        border-radius: 3px;
+      }
+      .effort-low {
+        color: var(--green);
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+      .effort-med {
+        color: var(--amber);
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+      }
+      .effort-high {
+        color: var(--red);
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+      }
+      .option-desc {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+      .option-pros {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .option-pros li {
+        font-size: 11px;
+        color: #94a3b8;
+        padding-left: 14px;
+        position: relative;
+      }
+      .option-pros li::before {
+        content: attr(data-icon);
+        position: absolute;
+        left: 0;
+      }
+
+      /* ── Env vars table ────────────────────────────────── */
+      .env-grid {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 40px;
+        font-size: 12px;
+      }
+      .env-row {
+        display: contents;
+      }
+      .env-row > * {
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+      }
+      .env-row:last-child > * {
+        border-bottom: none;
+      }
+      .env-row:nth-child(odd) > * {
+        background: rgba(255, 255, 255, 0.012);
+      }
+      .env-name {
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        color: var(--sky);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .env-desc {
+        color: var(--muted);
+      }
+      .env-status {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+      }
+      .env-needed {
+        color: var(--red);
+      }
+      .env-set {
+        color: var(--green);
+      }
+      .env-optional {
+        color: var(--faint);
+      }
+
+      /* ── Footer ────────────────────────────────────────── */
+      .footer {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-header">
+      <h1>OceanWatch AU</h1>
+      <span class="badge badge-amber">v0 → v1 Roadmap</span>
+    </div>
+    <p class="page-sub">
+      What exists, what's missing, and the critical path to first production-quality data.
+    </p>
+
+    <!-- ── Data pipeline ──────────────────────────────────── -->
+    <div class="section-title">Data pipeline — current status</div>
+    <div class="pipeline">
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-done"></span>
+          <span class="pipe-label">Source</span>
+        </div>
+        <div class="pipe-title">Sentinel-1 SAR</div>
+        <div class="pipe-detail">
+          Copernicus/CDSE OData API. Queried for GRD products over the AU/Pacific monitoring zone.
+        </div>
+        <span class="pipe-tag tag-done">✓ API client ready</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-missing"></span>
+          <span class="pipe-label">Detection</span>
+        </div>
+        <div class="pipe-title">Oil Slick Detection</div>
+        <div class="pipe-detail">
+          Currently returns SAR scene <em>footprints</em> only — not actual dark-spot detections. No
+          ML model or algorithm exists.
+        </div>
+        <span class="pipe-tag tag-missing">✗ Critical gap</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-partial"></span>
+          <span class="pipe-label">Validation</span>
+        </div>
+        <div class="pipe-title">Confidence Scoring</div>
+        <div class="pipe-detail">
+          Schema and tier logic exist (verified / probable / possible / anomaly). Needs a real
+          confidence signal to populate.
+        </div>
+        <span class="pipe-tag tag-partial">~ Schema only</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-partial"></span>
+          <span class="pipe-label">Storage</span>
+        </div>
+        <div class="pipe-title">Postgres / PostGIS</div>
+        <div class="pipe-detail">
+          Schema + migrations deployed on Vercel Neon. Database is empty — demo data never touches
+          it.
+        </div>
+        <span class="pipe-tag tag-partial">~ Empty in prod</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-partial"></span>
+          <span class="pipe-label">Ingest</span>
+        </div>
+        <div class="pipe-title">Cron Job</div>
+        <div class="pipe-detail">
+          <code>/api/cron/ingest</code> scaffolded and CRON_SECRET-protected. Runs but writes 0
+          real rows (CMEMS → 0 results; CDSE → footprints only).
+        </div>
+        <span class="pipe-tag tag-partial">~ Runs, no output</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-done"></span>
+          <span class="pipe-label">Serving</span>
+        </div>
+        <div class="pipe-title">Next.js API</div>
+        <div class="pipe-detail">
+          Server queries DB on page load, falls back to demo data if empty. PostGIS geometry →
+          GeoJSON via <code>ST_AsGeoJSON</code>.
+        </div>
+        <span class="pipe-tag tag-done">✓ Ready</span>
+      </div>
+
+      <div class="pipe-node">
+        <div class="pipe-header">
+          <span class="pipe-status status-done"></span>
+          <span class="pipe-label">Display</span>
+        </div>
+        <div class="pipe-title">MapLibre Globe</div>
+        <div class="pipe-detail">
+          Tier colours, diagonal-stripe demo overlay, AMSA historical layer, pulse animation,
+          incident panel, time scrubber.
+        </div>
+        <span class="pipe-tag tag-done">✓ Production-ready</span>
+      </div>
+    </div>
+
+    <!-- ── v0 vs v1 checklist ─────────────────────────────── -->
+    <div class="section-title">v0 complete vs v1 required</div>
+    <div class="checklist-grid">
+      <div class="checklist-col">
+        <div class="col-title col-title-green">✓ v0 — completed</div>
+
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">MapLibre globe — AU monitoring zone + dashed boundary</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">GEBCO bathymetry overlay</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Outside-zone dim mask (donut polygon)</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">
+              Tier-coloured detection tiles (verified / probable / possible / anomaly)
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Animated pulse for fresh (&lt;24 h) detections</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Diagonal-stripe pattern marks demo tiles visually</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">21 realistic demo detections (always-fresh fallback)</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">
+              6 AMSA historical incidents — permanent always-visible layer
+            </div>
+            <div class="check-note">
+              Montara, Pacific Adventurer, Shen Neng 1, Iron Baron, Kirki, Oceanic Grandeur
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">
+              Incident panel — vessel, quantity, notes, AMSA / Demo badges
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Time scrubber (30-day sliding window)</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Animated tier counts + live UTC clock in header</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Postgres / PostGIS schema — migrations ready</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Cron ingest scaffold + CRON_SECRET protection</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">Vercel deployment — Next.js 15.3.9 (CVE-2025-29927 patched)</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">✓</span>
+          <div>
+            <div class="check-text">CDSE / Copernicus API client wired up</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="checklist-col">
+        <div class="col-title col-title-amber">→ v1 — required</div>
+
+        <div class="check-item check-critical">
+          <span class="check-icon">🔴</span>
+          <div>
+            <div class="check-text">Real oil slick detection data source</div>
+            <div class="check-note">
+              Core blocker — see options below. Without this, the DB stays empty and demo mode never
+              turns off.
+            </div>
+          </div>
+        </div>
+        <div class="check-item check-critical">
+          <span class="check-icon">🔴</span>
+          <div>
+            <div class="check-text">At least one real detection written to PostGIS</div>
+            <div class="check-note">
+              Triggers automatic switch from demo → live mode on the globe.
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">CDSE credentials set in Vercel env vars</div>
+            <div class="check-note">
+              CDSE_CLIENT_ID + CDSE_CLIENT_SECRET — required for SAR image discovery.
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">CRON_SECRET set and Vercel cron scheduled</div>
+            <div class="check-note">vercel.json cron schedule to trigger /api/cron/ingest.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">Map legend distinguishes AMSA historical vs live detections</div>
+            <div class="check-note">
+              Currently both use the same tier colour palette with no legend separator.
+            </div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">Demo banner hidden in production once DB is populated</div>
+            <div class="check-note">Already automatic — isDemoMode flips to false when DB returns rows.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">Sentry error monitoring configured</div>
+            <div class="check-note">@sentry/nextjs already installed — needs SENTRY_DSN.</div>
+          </div>
+        </div>
+        <div class="check-item">
+          <span class="check-icon">○</span>
+          <div>
+            <div class="check-text">Basic uptime / alert for cron failures</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Detection source options ───────────────────────── -->
+    <div class="section-title">Critical path — oil detection options</div>
+    <div class="options-grid">
+      <div class="option-card recommended">
+        <div class="option-header">
+          <div class="option-name">Cerulean / SkyTruth API</div>
+          <span class="option-effort effort-low">Low effort</span>
+        </div>
+        <div class="option-desc">
+          Cerulean (by SkyTruth) is a REST API returning confirmed SAR-based oil detections
+          globally. Coverage includes Australian waters. Returns GeoJSON polygons with confidence
+          scores — maps directly onto the existing schema.
+        </div>
+        <ul class="option-pros">
+          <li data-icon="✓">Detection already done — API returns slick polygons, not footprints</li>
+          <li data-icon="✓">Confidence scores align with existing tier logic</li>
+          <li data-icon="✓">Minimal code change: swap CDSE fetch → Cerulean fetch in ingest.ts</li>
+          <li data-icon="✗">Commercial — requires subscription / API key</li>
+          <li data-icon="✗">Latency depends on provider update cadence</li>
+        </ul>
+      </div>
+
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-name">EMSA CleanSeaNet</div>
+          <span class="option-effort effort-med">Medium effort</span>
+        </div>
+        <div class="option-desc">
+          European Maritime Safety Agency operates a SAR-based oil spill detection service.
+          Coverage is primarily European waters; Australian coverage is limited or absent in the
+          standard offering.
+        </div>
+        <ul class="option-pros">
+          <li data-icon="✓">Official governmental service — high credibility</li>
+          <li data-icon="✓">Validated detections with confidence scoring</li>
+          <li data-icon="✗">No AU/Pacific coverage in standard tier</li>
+          <li data-icon="✗">Requires formal agreement / bilateral data sharing</li>
+          <li data-icon="✗">API not publicly documented</li>
+        </ul>
+      </div>
+
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-name">Build SAR dark-spot detector</div>
+          <span class="option-effort effort-high">High effort</span>
+        </div>
+        <div class="option-desc">
+          Process raw Sentinel-1 GRD imagery via SNAP or Google Earth Engine to identify SAR
+          dark-spots (low backscatter), then classify oil vs look-alike (wind shadow, biogenic
+          film, rain cells) using a trained ML model.
+        </div>
+        <ul class="option-pros">
+          <li data-icon="✓">Full control — custom confidence scoring possible</li>
+          <li data-icon="✓">No external dependency or ongoing API cost</li>
+          <li data-icon="✗">Months of ML/RS engineering effort</li>
+          <li data-icon="✗">High false-positive rate without extensive training data</li>
+          <li data-icon="✗">GEE or cloud compute cost for ongoing processing</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── Environment variables ──────────────────────────── -->
+    <div class="section-title">Environment variables required for v1</div>
+    <div class="env-grid">
+      <div class="env-row">
+        <div class="env-name">POSTGRES_URL</div>
+        <div class="env-desc">Neon DB connection string (Vercel Postgres)</div>
+        <div class="env-status env-needed">Required</div>
+      </div>
+      <div class="env-row">
+        <div class="env-name">CDSE_CLIENT_ID</div>
+        <div class="env-desc">
+          Copernicus Data Space Ecosystem — OAuth2 client ID for SAR product discovery
+        </div>
+        <div class="env-status env-needed">Required</div>
+      </div>
+      <div class="env-row">
+        <div class="env-name">CDSE_CLIENT_SECRET</div>
+        <div class="env-desc">CDSE OAuth2 client secret (keep in Vercel encrypted env)</div>
+        <div class="env-status env-needed">Required</div>
+      </div>
+      <div class="env-row">
+        <div class="env-name">CRON_SECRET</div>
+        <div class="env-desc">
+          Bearer token protecting /api/cron/* — set in Vercel and in vercel.json cron config
+        </div>
+        <div class="env-status env-needed">Required</div>
+      </div>
+      <div class="env-row">
+        <div class="env-name">DETECTION_API_KEY</div>
+        <div class="env-desc">
+          API key for chosen detection provider (e.g. Cerulean). Add when provider confirmed.
+        </div>
+        <div class="env-status env-optional">If Cerulean</div>
+      </div>
+      <div class="env-row">
+        <div class="env-name">SENTRY_DSN</div>
+        <div class="env-desc">
+          Sentry project DSN — @sentry/nextjs already installed, just needs this to activate
+        </div>
+        <div class="env-status env-optional">Recommended</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>OceanWatch AU — branch: claude/quirky-turing-hHYMR</span>
+      <span>Generated June 2026</span>
+    </div>
+  </body>
+</html>
